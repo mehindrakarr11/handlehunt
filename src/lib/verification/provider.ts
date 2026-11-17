@@ -1,22 +1,29 @@
-/**
- * Deliberately non-networked: no public official Instagram username registration
- * availability endpoint exists for a general app integration.
- * A future authorized provider can implement this contract without changing UI labels.
- */
-export type AvailabilityOutcome =
-  | { status: "manual_required"; username: string; message: string }
-  | { status: "unknown"; username: string; message: string };
-
-export interface VerificationProvider {
+export type AvailabilityOutcome = {
+  status: "UNKNOWN";
+  supported: false;
+  username: string;
+  provider: string;
+  source: "unsupported";
+  checkedAt: string;
+  message: string;
+};
+export interface AvailabilityProvider {
+  readonly name: string;
   check(username: string): Promise<AvailabilityOutcome>;
 }
-
-export class ManualOnlyProvider implements VerificationProvider {
+export class ManualOnlyProvider implements AvailabilityProvider {
+  readonly name = "unsupported";
   async check(username: string): Promise<AvailabilityOutcome> {
     return {
-      status: "manual_required",
+      status: "UNKNOWN",
+      supported: false,
       username,
-      message: "Open Instagram > Profile > Edit profile > Username and try the handle. Only Instagram can confirm whether you may claim it."
+      provider: this.name,
+      source: "unsupported",
+      checkedAt: new Date().toISOString(),
+      message:
+        "No officially authorized availability integration is configured. Check Instagram’s own username field and record a manual observation. A missing profile is not proof of availability.",
     };
   }
 }
+export type VerificationProvider = AvailabilityProvider;

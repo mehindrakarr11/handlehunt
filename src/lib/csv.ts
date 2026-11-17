@@ -7,20 +7,40 @@ function cell(value: string | number): string {
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
-export function makeCsv(items: Candidate[], checks: Record<string, ManualVerification>): string {
+export function makeCsv(
+  items: Candidate[],
+  checks: Record<string, ManualVerification>,
+): string {
   const rows = [
-    ["username", "brand_score", "length", "name_type", "manual_status", "checked_at", "note"],
+    [
+      "username",
+      "brand_score",
+      "length",
+      "name_type",
+      "manual_status",
+      "checked_at",
+      "note",
+      "verification_method",
+    ],
     ...items.map((item) => [
-      item.username, item.score, item.length, item.label,
-      checks[item.username]?.status || "unchecked",
+      item.username,
+      item.score,
+      item.length,
+      item.label,
+      checks[item.username]?.status || "UNVERIFIED",
       checks[item.username]?.checkedAt || "",
-      checks[item.username]?.note || ""
-    ])
+      checks[item.username]?.note || "",
+      checks[item.username]?.method || "",
+    ]),
   ];
   return rows.map((row) => row.map(cell).join(",")).join("\r\n");
 }
 
-export function downloadCsv(items: Candidate[], checks: Record<string, ManualVerification>, filename = "handlehunt-candidates.csv") {
+export function downloadCsv(
+  items: Candidate[],
+  checks: Record<string, ManualVerification>,
+  filename = "handlehunt-candidates.csv",
+) {
   const csv = `\uFEFF${makeCsv(items, checks)}`;
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
