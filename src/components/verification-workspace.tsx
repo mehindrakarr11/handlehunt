@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { api, useHandleStore } from "@/lib/client-store";
 import {
   STATUS_LABEL,
+  METHOD_LABEL,
+  type VerificationMethod,
   type Candidate,
   type ManualStatus,
   type VerificationEvent,
@@ -40,7 +42,7 @@ export function VerificationWorkspace({
                 id: string;
                 username: string;
                 status: ManualStatus;
-                method: "instagram_manual";
+                method: VerificationMethod;
                 note: string;
                 created_at: string;
               }) => ({
@@ -170,7 +172,7 @@ export function VerificationWorkspace({
                   <td>@{e.username}</td>
                   <td>{STATUS_LABEL[e.status]}</td>
                   <td>{new Date(e.checkedAt).toLocaleString()}</td>
-                  <td>Instagram · manual</td>
+                  <td>{METHOD_LABEL[e.method]}</td>
                   <td className="!whitespace-normal max-w-xs">
                     {e.note || "—"}
                   </td>

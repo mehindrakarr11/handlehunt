@@ -10,6 +10,6 @@ for attempt in {1..30}; do
   sleep 1
 done
 docker exec "$container" pg_isready -U postgres
-for sql in supabase/tests/bootstrap.sql supabase/migrations/202611170001_handlehunt.sql supabase/tests/ownership.sql; do
+for sql in supabase/tests/bootstrap.sql supabase/migrations/*.sql supabase/tests/ownership.sql supabase/tests/profile_reviews.sql; do
   docker exec -i "$container" psql -X -U postgres -v ON_ERROR_STOP=1 < "$sql"
 done

@@ -91,9 +91,15 @@ export const verificationSchema = z
     username: usernameSchema,
     status: statusSchema,
     note: z.string().trim().max(280).default(""),
-    method: z.literal("instagram_manual"),
+    method: z.enum(["instagram_manual", "instagram_profile_manual"]),
   })
-  .strict();
+  .strict()
+  .refine(
+    (v) =>
+      v.method !== "instagram_profile_manual" ||
+      ["REPORTED_UNAVAILABLE", "RESERVED_OR_UNKNOWN"].includes(v.status),
+    "A profile review can only report an existing profile or an unknown result. Test claimability in Instagram's username field.",
+  );
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(24),

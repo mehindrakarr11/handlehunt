@@ -23,6 +23,7 @@ import { HandleCard } from "./handle-card";
 import { VerificationDialog } from "./verification-dialog";
 import { useHandleStore } from "@/lib/client-store";
 import { downloadCsv } from "@/lib/csv";
+import { isMarkedTaken } from "@/lib/verification/review";
 import { STATUS_LABEL, DEFAULT_OPTIONS } from "@/lib/types";
 import type { Candidate, GenerateOptions } from "@/lib/types";
 
@@ -49,6 +50,7 @@ export function DiscoveryPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOrder>("score");
   const [selected, setSelected] = useState<Candidate | null>(null);
+  const [hideTaken, setHideTaken] = useState(true);
   const [onlySaved, setOnlySaved] = useState(false);
   const [page, setPage] = useState(1);
   const [view, setView] = useState<"grid" | "table">("grid");
@@ -89,6 +91,7 @@ export function DiscoveryPage() {
     const filtered = candidates.filter(
       (c) =>
         c.username.includes(text) &&
+        (!hideTaken || !isMarkedTaken(data.checks[c.username])) &&
         (!onlySaved || data.saved.some((s) => s.username === c.username)),
     );
     return filtered.sort((a, b) => {
@@ -96,7 +99,14 @@ export function DiscoveryPage() {
       if (sort === "alpha") return a.username.localeCompare(b.username);
       return b.score - a.score || a.username.localeCompare(b.username);
     });
-  }, [candidates, search, sort, onlySaved, data.saved]);
+  }, [candidates, search, sort, onlySaved, hideTaken, data.saved, data.checks]);
+  const currentPage = Math.min(
+    page,
+    Math.max(1, Math.ceil(results.length / 24)),
+  );
+  const takenCount = candidates.filter((c) =>
+    isMarkedTaken(data.checks[c.username]),
+  ).length;
   const checkedCount = candidates.filter((c) => data.checks[c.username]).length;
 
   return (
@@ -392,8 +402,8 @@ export function DiscoveryPage() {
             <ArrowRight size={17} />
           </button>
           <p className="text-[11px] leading-relaxed text-[#777b91] text-center">
-            Names are generated without querying Instagram. Availability is
-            always unverified until you check it yourself.
+            Generate ideas, then use Verify to review their official profiles.
+            Names you mark taken are hidden; missing profiles remain Unknown.
           </p>
         </aside>
         <section className="min-w-0 space-y-5">
@@ -402,7 +412,11 @@ export function DiscoveryPage() {
               <span className="eyebrow">
                 <span className="dot dot-purple" /> DISCOVERY RESULTS
               </span>
-              <h2 className="mt-1 text-[24px] font-bold tracking-tight text-white">
+              <h2
+                id="discovery-results-heading"
+                tabIndex={-1}
+                className="mt-1 text-[24px] font-bold tracking-tight text-white"
+              >
                 Your handle shortlist
               </h2>
               <p className="mt-1 text-sm text-[#8e91aa]">
@@ -449,7 +463,10 @@ export function DiscoveryPage() {
               <select
                 value={sort}
                 aria-label="Sort results"
-                onChange={(e) => setSort(e.target.value as SortOrder)}
+                onChange={(e) => {
+                  setSort(e.target.value as SortOrder);
+                  setPage(1);
+                }}
               >
                 <option value="score">Top score</option>
                 <option value="short">Shortest</option>
@@ -457,6 +474,17 @@ export function DiscoveryPage() {
               </select>
               <ChevronDown size={14} />
             </div>
+            <button
+              type="button"
+              className={`secondary-button !px-3 !py-2.5 ${hideTaken ? "filter-active" : ""}`}
+              aria-pressed={hideTaken}
+              onClick={() => {
+                setHideTaken((value) => !value);
+                setPage(1);
+              }}
+            >
+              <Filter size={15} /> Hide names marked taken
+            </button>
             <button
               type="button"
               className={`secondary-button !px-3 !py-2.5 ${onlySaved ? "filter-active" : ""}`}
@@ -479,6 +507,13 @@ export function DiscoveryPage() {
               <span className="hidden sm:inline">Export</span>
             </button>
           </div>
+          <p className="field-hint" role="status">
+            {hideTaken
+              ? `${takenCount} marked taken or claimed hidden. `
+              : "Showing names marked taken too. "}
+            Unknown names remain unconfirmed. Saved handles and review history
+            are kept.
+          </p>
           <div className="flex gap-2">
             <button
               type="button"
@@ -533,13 +568,15 @@ export function DiscoveryPage() {
             <>
               {view === "grid" ? (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {results.slice((page - 1) * 24, page * 24).map((item) => (
-                    <HandleCard
-                      key={item.username}
-                      candidate={item}
-                      onVerify={setSelected}
-                    />
-                  ))}
+                  {results
+                    .slice((currentPage - 1) * 24, currentPage * 24)
+                    .map((item) => (
+                      <HandleCard
+                        key={item.username}
+                        candidate={item}
+                        onVerify={setSelected}
+                      />
+                    ))}
                 </div>
               ) : (
                 <div className="table-wrap">
@@ -553,34 +590,36 @@ export function DiscoveryPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {results.slice((page - 1) * 24, page * 24).map((item) => (
-                        <tr key={item.username}>
-                          <td>@{item.username}</td>
-                          <td>{item.score}</td>
-                          <td>
-                            {
-                              STATUS_LABEL[
-                                data.checks[item.username]?.status ||
-                                  "UNVERIFIED"
-                              ]
-                            }
-                          </td>
-                          <td>
-                            <button
-                              className="small-action"
-                              onClick={() => void toggleSaved(item)}
-                            >
-                              {isSaved(item.username) ? "Unsave" : "Save"}
-                            </button>
-                            <button
-                              className="small-action"
-                              onClick={() => setSelected(item)}
-                            >
-                              Verify
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {results
+                        .slice((currentPage - 1) * 24, currentPage * 24)
+                        .map((item) => (
+                          <tr key={item.username}>
+                            <td>@{item.username}</td>
+                            <td>{item.score}</td>
+                            <td>
+                              {
+                                STATUS_LABEL[
+                                  data.checks[item.username]?.status ||
+                                    "UNVERIFIED"
+                                ]
+                              }
+                            </td>
+                            <td>
+                              <button
+                                className="small-action"
+                                onClick={() => void toggleSaved(item)}
+                              >
+                                {isSaved(item.username) ? "Unsave" : "Save"}
+                              </button>
+                              <button
+                                className="small-action"
+                                onClick={() => setSelected(item)}
+                              >
+                                Verify
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -588,18 +627,19 @@ export function DiscoveryPage() {
               <div className="flex items-center justify-between">
                 <button
                   className="secondary-button"
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
+                  disabled={currentPage === 1}
+                  onClick={() => setPage(currentPage - 1)}
                 >
                   Previous
                 </button>
                 <span className="text-sm">
-                  Page {page} of {Math.max(1, Math.ceil(results.length / 24))}
+                  Page {currentPage} of{" "}
+                  {Math.max(1, Math.ceil(results.length / 24))}
                 </span>
                 <button
                   className="secondary-button"
-                  disabled={page * 24 >= results.length}
-                  onClick={() => setPage((p) => p + 1)}
+                  disabled={currentPage * 24 >= results.length}
+                  onClick={() => setPage(currentPage + 1)}
                 >
                   Next
                 </button>
@@ -610,8 +650,8 @@ export function DiscoveryPage() {
               <Search size={27} className="mb-3 mx-auto text-purple-300" />
               <h3 className="font-semibold text-white">No matching handles</h3>
               <p className="mt-2 text-sm text-[#9699af]">
-                Try another filter, a shorter required pattern, or a new batch.
-                The real-word pool is deliberately limited.
+                Try another filter, show names marked taken, or generate a new
+                batch. The real-word pool is deliberately limited.
               </p>
               <button
                 type="button"
@@ -619,6 +659,8 @@ export function DiscoveryPage() {
                 onClick={() => {
                   setSearch("");
                   setOnlySaved(false);
+                  setHideTaken(false);
+                  setPage(1);
                 }}
               >
                 <RefreshCw size={14} /> Clear filters

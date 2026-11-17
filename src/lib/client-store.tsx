@@ -13,7 +13,11 @@ import type {
   ManualVerification,
   VerificationEvent,
 } from "./types";
-import { candidateSchema, isValidUsername, statusSchema } from "./validation";
+import {
+  candidateSchema,
+  isValidUsername,
+  verificationSchema,
+} from "./validation";
 import { browserClient } from "./supabase/browser";
 import { supabaseConfigured } from "./supabase/config";
 import { canTransition } from "./verification/transitions";
@@ -55,36 +59,40 @@ export function parseStore(text: string | null): HandleStore {
       claimed: "CLAIMED",
     };
     const checks: Record<string, ManualVerification> = Object.create(null);
-    for (const [name, value] of Object.entries(raw.checks || {})) {
+    const parseVerification = (
+      name: string,
+      value: unknown,
+    ): ManualVerification | null => {
+      if (!value || typeof value !== "object") return null;
       const v = value as ManualVerification;
-      const status = statusSchema.safeParse(legacy[v?.status] || v?.status);
-      if (
-        isValidUsername(name) &&
-        status.success &&
-        Number.isFinite(Date.parse(v.checkedAt))
-      )
-        checks[name] = {
-          status: status.data,
-          note: String(v.note || "").slice(0, 280),
-          checkedAt: v.checkedAt,
-          method: "instagram_manual",
-        };
+      const parsed = verificationSchema.safeParse({
+        username: name,
+        status: legacy[v.status] || v.status,
+        note: String(v.note || "").slice(0, 280),
+        method: v.method ?? "instagram_manual",
+      });
+      if (!parsed.success || !Number.isFinite(Date.parse(v.checkedAt)))
+        return null;
+      return {
+        status: parsed.data.status,
+        note: parsed.data.note,
+        method: parsed.data.method,
+        checkedAt: v.checkedAt,
+      };
+    };
+    for (const [name, value] of Object.entries(raw.checks || {})) {
+      const v = parseVerification(name, value);
+      if (isValidUsername(name) && v) checks[name] = v;
     }
     const events: VerificationEvent[] = Array.isArray(raw.events)
       ? raw.events
-          .filter(
-            (e: VerificationEvent) =>
-              isValidUsername(e?.username) &&
-              statusSchema.safeParse(e?.status).success &&
-              typeof e.id === "string" &&
-              Number.isFinite(Date.parse(e.checkedAt)),
-          )
+          .flatMap((e: VerificationEvent) => {
+            if (!e || typeof e.id !== "string" || !isValidUsername(e.username))
+              return [];
+            const v = parseVerification(e.username, e);
+            return v ? [{ ...v, id: e.id, username: e.username }] : [];
+          })
           .slice(0, 2000)
-          .map((e: VerificationEvent) => ({
-            ...e,
-            note: String(e.note || "").slice(0, 280),
-            method: "instagram_manual" as const,
-          }))
       : [];
     return {
       version: 2,
@@ -279,12 +287,20 @@ export function HandleStoreProvider({
     async (name: string, v: ManualVerification | null) => {
       try {
         if (!loaded || !isValidUsername(name)) return false;
-        const verification = v || {
-          status: "UNVERIFIED" as const,
-          checkedAt: new Date().toISOString(),
-          method: "instagram_manual" as const,
-          note: "",
-        };
+        const verification = v
+          ? { ...v }
+          : {
+              status: "UNVERIFIED" as const,
+              checkedAt: new Date().toISOString(),
+              method: "instagram_manual" as const,
+              note: "",
+            };
+        verificationSchema.parse({
+          username: name,
+          status: verification.status,
+          method: verification.method,
+          note: verification.note,
+        });
         if (
           !canTransition(
             data.checks[name]?.status || "UNVERIFIED",

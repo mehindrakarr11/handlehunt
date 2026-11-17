@@ -1,4 +1,5 @@
 import {
+  ApiError,
   failure,
   jsonBody,
   requireAccount,
@@ -49,11 +50,17 @@ export async function POST(request: Request) {
       p_username: v.username,
       p_status: v.status,
       p_note: v.note,
+      p_method: v.method,
     });
     if (error) {
+      if (error.code === "PGRST202")
+        throw new ApiError(
+          503,
+          "Profile review storage needs the latest database migration. Apply 202611180001_profile_reviews.sql.",
+        );
       if (error.message.includes("transition"))
         return failure(
-          new (await import("@/lib/api")).ApiError(
+          new ApiError(
             409,
             "Mark a claimed handle as Needs recheck before recording a different result.",
           ),

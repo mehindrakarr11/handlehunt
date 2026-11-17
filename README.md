@@ -17,7 +17,7 @@ With **both Supabase variables absent**, the app runs a prominently labeled **lo
 
 ## Supabase setup
 
-1. Create a Supabase project. In its SQL editor, run [`supabase/migrations/202611170001_handlehunt.sql`](supabase/migrations/202611170001_handlehunt.sql) **once**, or apply it through your normal Supabase migrations workflow. Never run `supabase/tests/bootstrap.sql` against a real project: it is only an isolated test shim.
+1. Create a Supabase project. In its SQL editor, apply the SQL files in `supabase/migrations/` in filename order, once each, or use your normal Supabase migrations workflow. If the base migration is already installed, apply only [`202611180001_profile_reviews.sql`](supabase/migrations/202611180001_profile_reviews.sql) for this update. Never run `supabase/tests/bootstrap.sql` against a real project: it is only an isolated test shim.
 2. Copy `.env.example` to `.env.local` and uncomment/set:
    - `NEXT_PUBLIC_SUPABASE_URL`: the project's HTTPS URL.
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: its **publishable** key. This key is intentionally public; RLS and authenticated ownership enforce data access. Never use a service-role or secret key in a `NEXT_PUBLIC_*` variable. No privileged key is needed by this app.
@@ -38,6 +38,12 @@ These accounts belong to **HandleHunt**, not Instagram. Never enter an Instagram
 - Deduplicated, bounded generation, client pagination, grid/table views, sorting, search and CSV export. A finite dictionary or very restrictive filters can return fewer names. Names may already be taken, reserved, restricted or trademarked.
 - Brand score rewards brevity, vowels/pronunciation, dictionary quality, clean spelling and memorable patterns; punctuation, digits and awkward repetition reduce it. It is an aesthetic heuristic, not a rarity, popularity, trademark or account-existence score.
 
+**Profile review:** in Discover, choose **Verify → Review public profile → Open @username on Instagram**. Check the exact username, not suggested accounts. On return, choose **Profile exists — mark taken** or **No profile / unclear — Unknown**. Opening a link by itself never records an observation. Missing pages, login prompts and errors remain unknown, never available.
+
+**Hide names marked taken** is enabled by default in Discover. It hides your latest `REPORTED_UNAVAILABLE` and `CLAIMED` results from both grid/table views and the current results CSV. Unknown, unverified and needs-recheck candidates stay visible. Switch the filter off to review hidden names; nothing is deleted from your saved collection or history. An updated unknown/recheck result makes a previously hidden name visible again. These are your own observations, not live Instagram lookups.
+
+Profile reviews use `instagram_profile_manual`; username-field observations use `instagram_manual`. The source appears in verification history and CSV exports. The API and database reject profile-based available/claimed results. Existing three-argument verification RPC clients remain compatible. Supabase deployments must apply the new profile-review migration before saving these observations.
+
 Save favourites, select them in `/queue`, and open Instagram's official website. Complete any signup, login and OTP there. Try a candidate in Instagram's own username field, then return and record what you observed. HandleHunt records server timestamps in cloud mode and browser timestamps in demo mode, the manual method, notes and history.
 
 | State                  | UI label / meaning                          |
@@ -57,17 +63,17 @@ A claimed handle must move to Needs recheck (or Unverified) before a different o
 
 Responses use `{ ok: true, data: ... }` or `{ ok: false, error: { message } }`. Private routes return 401 without a valid cloud session, or 503 when cloud persistence is unconfigured. Writes reject foreign Origin headers. Zod validates request bodies, route IDs, usernames and pagination; streaming JSON bodies are limited to 8 KiB.
 
-| Endpoint                                      | Behavior                                                                                              |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `POST /api/generate`                          | Bounded options; candidates, count, batch ID and unverified notice                                    |
-| `GET /api/handles?page=1&limit=24&search=sky` | Owned collection; items and total; `exact=1` for an exact search                                      |
-| `POST /api/handles`                           | Save a validated candidate, unique per user/username                                                  |
-| `DELETE /api/handles/[id]`                    | Delete only the authenticated owner's UUID record                                                     |
-| `GET /api/verifications?page=1&limit=24`      | Owned append-only observation history; `search` filters usernames                                     |
-| `GET /api/verifications?current=1`            | Owned latest observations; same pagination                                                            |
-| `POST /api/verifications`                     | `{username,status,method:"instagram_manual",note}`; atomically update current result and append event |
-| `GET /api/health`                             | Configured mode/capabilities; deliberately **does not probe database connectivity**                   |
-| `GET /api/availability?username=sky`          | Explicit unsupported/unknown provider result                                                          |
+| Endpoint                                      | Behavior                                                                                                                              |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/generate`                          | Bounded options; candidates, count, batch ID and unverified notice                                                                    |
+| `GET /api/handles?page=1&limit=24&search=sky` | Owned collection; items and total; `exact=1` for an exact search                                                                      |
+| `POST /api/handles`                           | Save a validated candidate, unique per user/username                                                                                  |
+| `DELETE /api/handles/[id]`                    | Delete only the authenticated owner's UUID record                                                                                     |
+| `GET /api/verifications?page=1&limit=24`      | Owned append-only observation history; `search` filters usernames                                                                     |
+| `GET /api/verifications?current=1`            | Owned latest observations; same pagination                                                                                            |
+| `POST /api/verifications`                     | `{username,status,method,note}` (`instagram_manual` or `instagram_profile_manual`); atomically update current result and append event |
+| `GET /api/health`                             | Configured mode/capabilities; deliberately **does not probe database connectivity**                                                   |
+| `GET /api/availability?username=sky`          | Explicit unsupported/unknown provider result                                                                                          |
 
 Tables: `user_profiles`, `generated_batches`, `saved_handles`, `handle_verifications`, `verification_events` and internal `rate_limit_buckets`. All have RLS; owner/time indexes support private queries. Profile IDs reference the auth UUID; other tables have UUID primary keys. Generation batches store options/counts, not every generated candidate. Cloud UI loads the newest 2,000 collection/check summaries; complete history and larger collections remain accessible through paginated APIs.
 
@@ -87,7 +93,7 @@ npm run test:smoke
 npm run test:db
 ```
 
-Unit tests cover boundary lengths, normalization, invalid syntax, all modes, constraints, deduplication, finite spaces, scoring, statuses/transitions, provider behavior, CSV injection protection and demo throttling. The SQL suite applies the real migration to isolated PostgreSQL using an auth shim, then exercises ownership, forbidden reads/deletes/inserts, duplicate prevention, immutable history, transitions and rate limits. It does not emulate Supabase email delivery or cookie sessions. The smoke suite expects a running **demo** server at `SMOKE_BASE_URL` (default `http://127.0.0.1:3000`).
+Unit tests cover boundary lengths, normalization, invalid syntax, all modes, constraints, deduplication, finite spaces, scoring, statuses/transitions, provider behavior, CSV injection protection and demo throttling. The SQL suite applies the real migration to isolated PostgreSQL using an auth shim, then exercises ownership, forbidden reads/deletes/inserts, duplicate prevention, immutable history, transitions, rate limits, profile-review source preservation and rejected claimability assertions. It does not emulate Supabase email delivery or cookie sessions. The smoke suite expects a running **demo** server at `SMOKE_BASE_URL` (default `http://127.0.0.1:3000`).
 
 ## Vercel deployment
 

@@ -45,10 +45,17 @@ export const STATUS_LABEL: Record<ManualStatus, string> = {
   RESERVED_OR_UNKNOWN: "Reserved or unknown",
   CLAIMED: "Claimed by you",
 };
+export type VerificationMethod =
+  | "instagram_manual"
+  | "instagram_profile_manual";
+export const METHOD_LABEL: Record<VerificationMethod, string> = {
+  instagram_manual: "Username field · manual",
+  instagram_profile_manual: "Public profile · manual",
+};
 export type ManualVerification = {
   status: ManualStatus;
   checkedAt: string;
-  method: "instagram_manual";
+  method: VerificationMethod;
   note: string;
 };
 export type VerificationEvent = ManualVerification & {
