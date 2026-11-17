@@ -1,4 +1,12 @@
-import { NextResponse } from "next/server";
+import { success } from "@/lib/api";
+import { supabaseConfigured } from "@/lib/supabase/config";
 export function GET() {
-  return NextResponse.json({ service: "HandleHunt", phase: 1, discovery: true, automatedInstagramChecks: false, verification: "manual" });
+  return success({
+    service: "HandleHunt",
+    mode: supabaseConfigured() ? "cloud" : "demo",
+    discovery: true,
+    automatedInstagramChecks: false,
+    verification: "manual",
+    databaseConnectivity: "not_probed",
+  });
 }

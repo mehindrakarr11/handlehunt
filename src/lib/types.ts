@@ -1,5 +1,12 @@
-export type GenerationStyle = "balanced" | "words" | "invented" | "minimal";
-
+export type GenerationStyle =
+  | "balanced"
+  | "words"
+  | "invented"
+  | "minimal"
+  | "aesthetic"
+  | "brand"
+  | "random"
+  | "og";
 export type GenerateOptions = {
   minLength: number;
   maxLength: number;
@@ -10,8 +17,12 @@ export type GenerateOptions = {
   contains: string;
   endsWith: string;
   requireVowel: boolean;
+  allowNumbers: boolean;
+  allowUnderscores: boolean;
+  allowDots: boolean;
+  pattern: string;
+  keyword: string;
 };
-
 export type Candidate = {
   username: string;
   score: number;
@@ -19,22 +30,37 @@ export type Candidate = {
   length: number;
   origin: GenerationStyle;
 };
-
-export type ManualStatus = "unchecked" | "appeared_claimable" | "not_claimable" | "claimed";
-
+export type ManualStatus =
+  | "UNVERIFIED"
+  | "NEEDS_RECHECK"
+  | "REPORTED_AVAILABLE"
+  | "REPORTED_UNAVAILABLE"
+  | "RESERVED_OR_UNKNOWN"
+  | "CLAIMED";
+export const STATUS_LABEL: Record<ManualStatus, string> = {
+  UNVERIFIED: "Unverified",
+  NEEDS_RECHECK: "Needs recheck",
+  REPORTED_AVAILABLE: "User-reported available",
+  REPORTED_UNAVAILABLE: "User-reported unavailable",
+  RESERVED_OR_UNKNOWN: "Reserved or unknown",
+  CLAIMED: "Claimed by you",
+};
 export type ManualVerification = {
-  status: Exclude<ManualStatus, "unchecked">;
+  status: ManualStatus;
   checkedAt: string;
   method: "instagram_manual";
   note: string;
 };
-
+export type VerificationEvent = ManualVerification & {
+  username: string;
+  id: string;
+};
 export type HandleStore = {
-  version: 1;
+  version: 2;
   saved: Candidate[];
   checks: Record<string, ManualVerification>;
+  events: VerificationEvent[];
 };
-
 export const DEFAULT_OPTIONS: GenerateOptions = {
   minLength: 3,
   maxLength: 6,
@@ -44,5 +70,10 @@ export const DEFAULT_OPTIONS: GenerateOptions = {
   startsWith: "",
   contains: "",
   endsWith: "",
-  requireVowel: true
+  requireVowel: true,
+  allowNumbers: false,
+  allowUnderscores: false,
+  allowDots: false,
+  pattern: "",
+  keyword: "",
 };

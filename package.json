@@ -8,13 +8,19 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test __tests__/*.test.ts"
+    "test": "tsx --test __tests__/*.test.ts",
+    "test:db": "bash scripts/test-db.sh",
+    "test:smoke": "tsx --test scripts/smoke.test.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
+    "lucide-react": "^0.468.0",
+    "motion": "^14.14.0",
     "next": "16.4.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "lucide-react": "^0.468.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
@@ -29,6 +35,6 @@
     "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.0.0"
   }
 }

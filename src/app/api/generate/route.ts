@@ -1,28 +1,61 @@
-import { NextResponse } from "next/server";
+import {
+  ApiError,
+  failure,
+  jsonBody,
+  requireAccount,
+  sameOrigin,
+  success,
+} from "@/lib/api";
 import { generateCandidates, validateOptions } from "@/lib/handle-generator";
-
+import { generationSchema } from "@/lib/validation";
+import { supabaseConfigured } from "@/lib/supabase/config";
+import { demoLimit } from "@/lib/demo-limit";
 export const runtime = "nodejs";
-
 export async function POST(request: Request) {
   try {
-    const type = request.headers.get("content-type") || "";
-    if (!type.toLowerCase().includes("application/json"))
-      return NextResponse.json({ error: "Send a JSON request." }, { status: 415 });
-    // Reject unusually large bodies (protects public deployments from accidental overload).
-    const length = Number(request.headers.get("content-length") || 0);
-    if (length > 4096) return NextResponse.json({ error: "Request too large." }, { status: 413 });
-    const raw = await request.text();
-    if (raw.length > 4096) return NextResponse.json({ error: "Request too large." }, { status: 413 });
-    const options = validateOptions(JSON.parse(raw));
+    sameOrigin(request);
+    let account: Awaited<ReturnType<typeof requireAccount>> | null = null;
+    if (supabaseConfigured()) {
+      account = await requireAccount();
+    } else if (!demoLimit("generation"))
+      throw new ApiError(
+        429,
+        "Demo generation limit reached. Try again in a minute.",
+      );
+    const raw = generationSchema.parse(await jsonBody(request));
+    let options;
+    try {
+      options = validateOptions(raw);
+    } catch (error) {
+      throw new ApiError(
+        400,
+        error instanceof Error ? error.message : "Invalid filters",
+      );
+    }
     const candidates = generateCandidates(options);
-    return NextResponse.json({
+    let batchId: string | null = null;
+    if (account) {
+      const { data, error } = await account.client
+        .from("generated_batches")
+        .insert({
+          user_id: account.user.id,
+          options,
+          candidate_count: candidates.length,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      batchId = data.id;
+    }
+    return success({
       candidates,
       count: candidates.length,
-      availability: "unverified",
-      notice: "These names were generated locally. No Instagram availability lookup was performed."
-    }, { headers: { "Cache-Control": "no-store" } });
+      batchId,
+      availability: "UNVERIFIED",
+      mode: account ? "cloud" : "demo",
+      notice: "No Instagram availability lookup was performed.",
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Invalid request.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return failure(error);
   }
 }
